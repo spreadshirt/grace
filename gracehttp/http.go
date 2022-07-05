@@ -34,6 +34,7 @@ type app struct {
 	listeners       []net.Listener
 	sds             []httpdown.Server
 	preStartProcess func() error
+	wrapListener    func(*http.Server, net.Listener) (net.Listener, error)
 	errors          chan error
 }
 
@@ -61,6 +62,9 @@ func (a *app) listen() error {
 		}
 		if s.TLSConfig != nil {
 			l = tls.NewListener(l, s.TLSConfig)
+		}
+		if a.wrapListener != nil {
+			l, err = a.wrapListener(s, l)
 		}
 		a.listeners = append(a.listeners, l)
 	}
@@ -200,6 +204,17 @@ func PreStartProcess(hook func() error) option {
 	return func(a *app) {
 		a.preStartProcess = hook
 	}
+}
+
+// WrapListener allows customizing the net.Listener used for the servers.
+//
+// It is called with each listener that is created so that it can be wrapped in
+// a different one or return a custom one entirely.
+func WrapListener(wrapListener func(*http.Server, net.Listener) (net.Listener, error)) option {
+	return func(a *app) {
+		a.wrapListener = wrapListener
+	}
+
 }
 
 // Used for pretty printing addresses.
